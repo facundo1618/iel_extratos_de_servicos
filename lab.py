@@ -6,16 +6,22 @@ from pathlib import Path
 import os
 from RPA.Email.ImapSmtp import ImapSmtp
 
+def clear_directory(directory):
+    file = FileSystem()
+    try:
+        file.empty_directory(directory)
+        print("diretório limpo!")
+    except:
+        print('Não foi possível limpar o diretório')
 
-def creat_new_service_note(browser: Selenium):
+def creat_new_service_note(browser: Selenium, faturamento_date):
     chrome_prefs = {
-    "download.default_directory": r'C:\\Users\\rfcosta\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\base',
+    "download.default_directory": f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\base",
     "download.prompt_for_download": False,
     "download.directory_upgrade": True,
     "plugins.always_open_pdf_externally": True,
 }
-
-    user = "rfcosta"
+    user = "rfcost"
     password = 'Iel23@'
     url_login = 'https://gestaovagas.iel-ce.org.br/hlogin.aspx'
     url_faturamentos = 'https://gestaovagas.iel-ce.org.br/HResListaFaturamentos.aspx?hitrpaginainicial.aspx'
@@ -25,31 +31,51 @@ def creat_new_service_note(browser: Selenium):
     id_usuarios_test = 'SearchType'
     id_novo_button = 'BTNNOVO'
     id_grupodefaturamento_field = 'RSGRF_ID'
-    id_datadefaturamento_field = 'RSFAT_DATA'
     id_salvar_button = 'BTNSALVAR'
     id_imprimir_button = 'BTNIMPRIMIR'
-    javascript_code = "document.getElementById('RSFAT_DATA').textContent = '04092023'"
-
-    data_de_faturamento = '04/09/2023'
 
     # TODO: criar verificação de login
     browser.open_chrome_browser(url=url_login, preferences=chrome_prefs)
-    browser.input_text_when_element_is_visible(id_user, user)
-    browser.input_text_when_element_is_visible(id_password, password)
-    browser.click_element_when_visible(id_login_button)
+
+    def check_login(browser: Selenium):
+        test = browser.does_page_contain_element(id_user)
+        print(test)
+
+        return test
+
+    count = 0
+    while True:
+        try:
+            if count == 3:
+                print('Foram efetuadas 3 tentativas de login sem êxito. Revise as credenciais')
+                browser.close_browser()
+                break
+            test = check_login(browser)
+            if test == False:
+                break
+            else:
+                print('Fazendo login...')
+                browser.press_keys(id_user, 'CTRL + A')
+                browser.input_text_when_element_is_visible(id_user, user)
+                browser.press_keys(id_password, 'CTRL + A')
+                browser.input_text_when_element_is_visible(id_password, password)
+                browser.click_element_when_visible(id_login_button)
+                count +=1
+        except:
+            print('Login validado')
 
     browser.wait_until_page_contains_element(id_usuarios_test, 90)
-    # browser.go_to(url_faturamentos)
-    # browser.click_element_when_visible(id_novo_button)
-    # browser.select_from_list_by_value(id_grupodefaturamento_field, '1')
-    # browser.execute_javascript(f"document.getElementById('RSFAT_DATA').value = '{data_de_faturamento}'")
-    # # TODO: verificar se download está correto
-    # browser.click_element_when_visible(id_salvar_button)
+    browser.go_to(url_faturamentos)
+    browser.click_element_when_visible(id_novo_button)
+    browser.select_from_list_by_value(id_grupodefaturamento_field, '45')
+    browser.execute_javascript(f"document.getElementById('RSFAT_DATA').value = '{faturamento_date}'")
+    browser.click_element_when_visible(id_salvar_button)
 
-    # browser.wait_until_element_is_visible(id_imprimir_button, 1000)
-    # # esperar faturamento
+    # esperar faturamento
+    browser.wait_until_element_is_visible(id_imprimir_button, 1000)
+
     
-def download_service_note(browser: Selenium):
+def download_service_note(browser: Selenium, file_path):
     id_imprimir_button = 'BTNIMPRIMIR'
     id_relatorio_de_conferencia = 'vTIPORELATORIO'
     id_imprimir_2_button = 'BTNPRINT'
@@ -59,9 +85,15 @@ def download_service_note(browser: Selenium):
     browser.select_from_list_by_value(id_relatorio_de_conferencia, 'X')
     browser.click_element_when_visible(id_imprimir_2_button)
 
+    def wait_until_download_finish(file_path):
+        file = FileSystem()
+        file.does_file_exist(file_path)
+    
+    wait_until_download_finish(file_path)
+
+
 def get_company_name(directory):
     pdf = PDF()
-    file_ = FileSystem()
     list_of_files = os.listdir(directory)
     errors = []
     list_of_names = []
@@ -77,7 +109,6 @@ def get_company_name(directory):
     return list_of_names
 
 def send_email(company_name: str, email_atribbute: str):
-    email = ImapSmtp()
     service_note_path = f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\output\\{company_name}.pdf"
     gmail_account = "rfcosta@sfiec.org.br"
     gmail_app_password = "japvpatyzugkbruc"
@@ -93,7 +124,8 @@ Este é um email teste referente ao RPA de faturamento. Ignore-o.
                         attachments=[service_note_path])
 
 def get_email_info(browser: Selenium, directory: str):
-    list_of_emails = []
+    list_of_emails = [] #para criar um relatório na próxima versão
+    count = 0
 
     list_of_company_names = get_company_name(directory)
     id_pesquisa_field = 'vPESQUISA'
@@ -106,32 +138,55 @@ def get_email_info(browser: Selenium, directory: str):
         try:
             browser.go_to(url_intranet)
             browser.input_text_when_element_is_visible(id_pesquisa_field, company_name)
-            # TODO: criar verificação para nome da empresa
-            sleep(1.5)
-            browser.click_element_when_visible(id_primeirocamporazaosocial_field)
-            browser.click_element_when_visible(id_contato_button)
-            email_atribbute = browser.get_text(id_email_field)
-            # email_atribbute = 'rfcosta@sfiec.org.br'
-            list_of_emails.append(email_atribbute)
+            # ******TODO: criar verificação para nome da empresa******
+            sleep(5) # criando a verificação, tira o sleep()
+            company_name_verification = browser.get_text(id_primeirocamporazaosocial_field)
+            if company_name_verification == company_name:
+                browser.click_element_when_visible(id_primeirocamporazaosocial_field)
+                browser.click_element_when_visible(id_contato_button)
+                sleep(1.5)
+                email_atribbute = browser.get_text(id_email_field)
+                email_atribbute = 'rfcosta@sfiec.org.br'
+                list_of_emails.append(email_atribbute)
 
-            send_email(company_name, email_atribbute)
+                send_email(company_name, email_atribbute)
+                count +=1
+            else:
+                print('não foi possível verificar se o nome da empresa')
+
         except:
             print(f'Não foi possível buscar o email da empresa {company_name}')
 
-    # for email in list_of_emails:
-    #     print(email)
+    sleep(3)
+    browser.close_browser()
 
-    # print(len(list_of_emails))
-
+    return count
 
 if __name__ == "__main__":
     browser = Selenium()
     browser.auto_close = False
 
-    creat_new_service_note(browser)
+    creat_new_service_note(browser, '30/09/2023')
     # # download_service_note(browser)
     # get_email_info(browser)
 
-    file_directory = r'C:\\Users\\rfcosta\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\output'
-    get_email_info(browser, file_directory)
+    # file_directory = r'C:\\Users\\rfcosta\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\output'
+    # get_email_info(browser, file_directory)
+    # clear_directory(file_directory)
+
+    # def wait_until_download_finish(file_path):
+    #     file = FileSystem()
+    #     test = file.does_file_exist(file_path)
+    
+    #     return test
+    
+    # file_path = f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\base\\arresrelfatextratoestagios.pdf"
+
+    # while True:
+    #     test = wait_until_download_finish(file_path)
+    #     if test == True:
+    #         print("download finalizado")
+    #         break
+    #     else:
+    #         print("aguardando download finalizar")
 
