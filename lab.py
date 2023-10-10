@@ -1,192 +1,54 @@
 from RPA.Browser.Selenium import Selenium
 from time import sleep
-from RPA.PDF import PDF
-from RPA.FileSystem import FileSystem
-from pathlib import Path
-import os
-from RPA.Email.ImapSmtp import ImapSmtp
 
-def clear_directory(directory):
-    file = FileSystem()
-    try:
-        file.empty_directory(directory)
-        print("diretório limpo!")
-    except:
-        print('Não foi possível limpar o diretório')
+url_login = 'https://gestaovagas.iel-ce.org.br/hlogin.aspx'
+url_intranet = 'https://gestaovagas.iel-ce.org.br/HComListaPessoas.aspx?hitrpaginainicial.aspx'
+id_user = 'vUSU_USUARIO'
+id_password = 'vUSU_SENHA'
+user = "ielce.rpa"
+password = 'Ielce2@'
+id_pesquisa_field = 'vPESQUISA'
+id_login_button = 'BTNLOGIN'
+id_primeirocamporazaosocial_field = 'span_vPES_RAZAO_SOCIAL_0001'
+id_contato_button = 'Tab_TAB1Containerpanel2'
+id_table = 'W0324GridContainerTbl'
+js_code = '''// Pegar linhas
+const linhas = document.querySelectorAll('#W0324GridContainerTbl .WorkWithOdd')
 
-def creat_new_service_note(browser: Selenium, faturamento_date):
-    chrome_prefs = {
-    "download.default_directory": f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\base",
-    "download.prompt_for_download": False,
-    "download.directory_upgrade": True,
-    "plugins.always_open_pdf_externally": True,
-}
-    user = "rfcost"
-    password = 'Iel23@'
-    url_login = 'https://gestaovagas.iel-ce.org.br/hlogin.aspx'
-    url_faturamentos = 'https://gestaovagas.iel-ce.org.br/HResListaFaturamentos.aspx?hitrpaginainicial.aspx'
-    id_user = 'vUSU_USUARIO'
-    id_password = 'vUSU_SENHA'
-    id_login_button = 'BTNLOGIN'
-    id_usuarios_test = 'SearchType'
-    id_novo_button = 'BTNNOVO'
-    id_grupodefaturamento_field = 'RSGRF_ID'
-    id_salvar_button = 'BTNSALVAR'
-    id_imprimir_button = 'BTNIMPRIMIR'
+// Declarar array onde serão colocados os emails
+let email_cobranca = []
 
-    # TODO: criar verificação de login
-    browser.open_chrome_browser(url=url_login, preferences=chrome_prefs)
-
-    def check_login(browser: Selenium):
-        test = browser.does_page_contain_element(id_user)
-        print(test)
-
-        return test
-
-    count = 0
-    while True:
-        try:
-            if count == 3:
-                print('Foram efetuadas 3 tentativas de login sem êxito. Revise as credenciais')
-                browser.close_browser()
-                break
-            test = check_login(browser)
-            if test == False:
-                break
-            else:
-                print('Fazendo login...')
-                browser.press_keys(id_user, 'CTRL + A')
-                browser.input_text_when_element_is_visible(id_user, user)
-                browser.press_keys(id_password, 'CTRL + A')
-                browser.input_text_when_element_is_visible(id_password, password)
-                browser.click_element_when_visible(id_login_button)
-                count +=1
-        except:
-            print('Login validado')
-
-    browser.wait_until_page_contains_element(id_usuarios_test, 90)
-    browser.go_to(url_faturamentos)
-    browser.click_element_when_visible(id_novo_button)
-    browser.select_from_list_by_value(id_grupodefaturamento_field, '45')
-    browser.execute_javascript(f"document.getElementById('RSFAT_DATA').value = '{faturamento_date}'")
-    browser.click_element_when_visible(id_salvar_button)
-
-    # esperar faturamento
-    browser.wait_until_element_is_visible(id_imprimir_button, 1000)
-
+// Iterar Linhas
+linhas.forEach(linha=>{
+    // Para cada linha, pegar checkbox da terceira coluna 
+    const check_cobranca = linha.querySelector('[data-colindex="3"] input[type="checkbox"]')
     
-def download_service_note(browser: Selenium, file_path):
-    id_imprimir_button = 'BTNIMPRIMIR'
-    id_relatorio_de_conferencia = 'vTIPORELATORIO'
-    id_imprimir_2_button = 'BTNPRINT'
-
-    browser.click_element_when_visible(id_imprimir_button)
-    browser.wait_until_element_is_visible(id_relatorio_de_conferencia)
-    browser.select_from_list_by_value(id_relatorio_de_conferencia, 'X')
-    browser.click_element_when_visible(id_imprimir_2_button)
-
-    def wait_until_download_finish(file_path):
-        file = FileSystem()
-        file.does_file_exist(file_path)
+    // Para cada linha, pegar conteudo da 6° coluna (email) 
+    const email = linha.querySelector('[data-colindex="6"] span').innerText
     
-    wait_until_download_finish(file_path)
+    // Se o checkbox tem o valor='S' (está marcado), pegue o email e coloque no array email_cobranca
+    if(check_cobranca.value=='S'){
+        email_cobranca.push(email)
+    }
+})
+
+// Printar email_cobranca
+return(email_cobranca)'''
+
+browser = Selenium()
+browser.auto_close = False
+browser.open_chrome_browser(url_login)
+browser.input_text_when_element_is_visible(id_user, user)
+browser.input_text_when_element_is_visible(id_password, password)
+browser.click_element_when_visible(id_login_button)
+sleep(9)
+browser.go_to(url_intranet)
+browser.input_text_when_element_is_visible(id_pesquisa_field, 'FAE SISTEMAS DE MEDICAO S/A')
+sleep(3)
+browser.click_element_when_visible(id_primeirocamporazaosocial_field)
+browser.click_element_when_visible(id_contato_button)
+email_cobranca = browser.execute_javascript(js_code)
+print(email_cobranca)
 
 
-def get_company_name(directory):
-    pdf = PDF()
-    list_of_files = os.listdir(directory)
-    errors = []
-    list_of_names = []
-    for file in list_of_files:
-        try:
-            pdf.open_pdf(f"{directory}\\{file}") 
-            company_name = pdf.find_text("Razão Social:", 1) 
-            company_name = company_name[0].neighbours[0]
-            list_of_names.append(company_name) 
-        except:
-            errors.append(file)
-
-    return list_of_names
-
-def send_email(company_name: str, email_atribbute: str):
-    service_note_path = f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\output\\{company_name}.pdf"
-    gmail_account = "rfcosta@sfiec.org.br"
-    gmail_app_password = "japvpatyzugkbruc"
-    mail = ImapSmtp(smtp_server="smtp.gmail.com", smtp_port=587)
-    mail.authorize(account=gmail_account, password=gmail_app_password)
-    mail.send_message(sender=gmail_account,
-                        recipients= email_atribbute,
-                        subject=f"NOTA DE SERVIÇO - {company_name}",
-                        body=f"""
-Olá!\n
-Este é um email teste referente ao RPA de faturamento. Ignore-o.
-                        """,
-                        attachments=[service_note_path])
-
-def get_email_info(browser: Selenium, directory: str):
-    list_of_emails = [] #para criar um relatório na próxima versão
-    count = 0
-
-    list_of_company_names = get_company_name(directory)
-    id_pesquisa_field = 'vPESQUISA'
-    url_intranet = 'https://gestaovagas.iel-ce.org.br/HComListaPessoas.aspx?hitrpaginainicial.aspx'
-    id_primeirocamporazaosocial_field = 'span_PES_NOME_FANTASIA_0001' 
-    id_contato_button = 'Tab_TAB1Containerpanel2'
-    id_email_field = 'span_W0324CNT_EMAIL_0001'
-
-    for company_name in list_of_company_names:
-        try:
-            browser.go_to(url_intranet)
-            browser.input_text_when_element_is_visible(id_pesquisa_field, company_name)
-            # ******TODO: criar verificação para nome da empresa******
-            sleep(5) # criando a verificação, tira o sleep()
-            company_name_verification = browser.get_text(id_primeirocamporazaosocial_field)
-            if company_name_verification == company_name:
-                browser.click_element_when_visible(id_primeirocamporazaosocial_field)
-                browser.click_element_when_visible(id_contato_button)
-                sleep(1.5)
-                email_atribbute = browser.get_text(id_email_field)
-                email_atribbute = 'rfcosta@sfiec.org.br'
-                list_of_emails.append(email_atribbute)
-
-                send_email(company_name, email_atribbute)
-                count +=1
-            else:
-                print('não foi possível verificar se o nome da empresa')
-
-        except:
-            print(f'Não foi possível buscar o email da empresa {company_name}')
-
-    sleep(3)
-    browser.close_browser()
-
-    return count
-
-if __name__ == "__main__":
-    browser = Selenium()
-    browser.auto_close = False
-
-    creat_new_service_note(browser, '30/09/2023')
-    # # download_service_note(browser)
-    # get_email_info(browser)
-
-    # file_directory = r'C:\\Users\\rfcosta\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\output'
-    # get_email_info(browser, file_directory)
-    # clear_directory(file_directory)
-
-    # def wait_until_download_finish(file_path):
-    #     file = FileSystem()
-    #     test = file.does_file_exist(file_path)
-    
-    #     return test
-    
-    # file_path = f"{Path().home()}\\Desktop\\Palácio\\Códigos\\iel_extratos_de_serviço\\base\\arresrelfatextratoestagios.pdf"
-
-    # while True:
-    #     test = wait_until_download_finish(file_path)
-    #     if test == True:
-    #         print("download finalizado")
-    #         break
-    #     else:
-    #         print("aguardando download finalizar")
 
